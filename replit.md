@@ -25,11 +25,14 @@ Personal AI assistant mobile app with:
 - **Reminders screen**: Add/toggle/delete reminders with time labels
 - **Settings screen**: Appearance, notifications, privacy settings
 - **Context**: JarvisContext manages messages and reminders via AsyncStorage
+- **AI**: Claude Sonnet via Replit AI Integrations (Anthropic)
 - **Colors**: iOS-inspired dark/light palette (blues, greens)
 - **Fonts**: Inter (400/500/600/700)
 
 ### API Server (artifacts/api-server)
-Express 5 backend with health route.
+Express 5 backend with:
+- Health route
+- `/api/jarvis/chat` — Claude Sonnet chat endpoint via Replit AI Integrations
 
 ## Key Commands
 
@@ -41,3 +44,7 @@ Express 5 backend with health route.
 - `pnpm --filter @workspace/mobile run dev` — run mobile Expo app
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## GitHub Integration Note
+
+The user wants to push this project to a public GitHub repo named "JarvisApp". The Replit GitHub OAuth connector was dismissed. If the user wants to retry via OAuth, use connector ID `connector:ccfg_github_01K4B9XD3VRVD2F99YM91YTCAF`. Alternatively, the user can provide a GitHub Personal Access Token (stored as secret `GITHUB_TOKEN`) with `repo` scope, and the agent can use the GitHub API + git to create the repo and push.

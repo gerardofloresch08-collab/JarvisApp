@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a47e5f11-0e5d-4e85-939d-9efeae30ce77"
+      }
+    },
+    "android": {
+      "package": "com.gerardofloresch08.workspace"
+    }
+  }
+}

@@ -15,6 +15,21 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **Mobile**: Expo (React Native) with Expo Router
+
+## Artifacts
+
+### JarvisApp (artifacts/mobile)
+Personal AI assistant mobile app with:
+- **Chat screen**: Conversational AI chat with animated orb, quick action chips, typing indicator
+- **Reminders screen**: Add/toggle/delete reminders with time labels
+- **Settings screen**: Appearance, notifications, privacy settings
+- **Context**: JarvisContext manages messages and reminders via AsyncStorage
+- **Colors**: iOS-inspired dark/light palette (blues, greens)
+- **Fonts**: Inter (400/500/600/700)
+
+### API Server (artifacts/api-server)
+Express 5 backend with health route.
 
 ## Key Commands
 
@@ -23,5 +38,6 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `pnpm --filter @workspace/mobile run dev` — run mobile Expo app
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

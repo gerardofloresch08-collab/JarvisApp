@@ -45,49 +45,50 @@ interface JarvisContextType {
 const JarvisContext = createContext<JarvisContextType | null>(null);
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { id: "1", label: "Weather", prompt: "What's the weather like today?", icon: "cloud" },
-  { id: "2", label: "Schedule", prompt: "Help me plan my day", icon: "calendar" },
-  { id: "3", label: "Ideas", prompt: "Give me 3 creative ideas for today", icon: "bulb" },
-  { id: "4", label: "Focus", prompt: "I need to focus. Give me a productivity tip.", icon: "flash" },
+  { id: "1", label: "Weather", prompt: "What's the weather like today? Give me a brief summary.", icon: "cloud" },
+  { id: "2", label: "Schedule", prompt: "Help me plan my day productively.", icon: "calendar" },
+  { id: "3", label: "Ideas", prompt: "Give me 3 creative ideas I can do today.", icon: "bulb" },
+  { id: "4", label: "Focus", prompt: "I need to focus. Give me one powerful productivity tip.", icon: "flash" },
 ];
-
-const JARVIS_RESPONSES: Record<string, string> = {
-  weather: "Based on current conditions, it looks like a clear day ahead. Temperature around 72°F with a gentle breeze. Perfect for a walk outside.",
-  schedule: "I'd suggest starting with your highest-priority task in the morning when your focus is sharpest. Block 25-minute deep work sessions with 5-minute breaks. What's your main goal today?",
-  ideas: "Here are three ideas:\n\n1. Start a 30-day creative challenge — pick one skill to practice daily.\n2. Reach out to someone you haven't spoken to in months.\n3. Spend 10 minutes journaling about what's working well in your life.",
-  focus: "Try the Pomodoro Technique: work intensely for 25 minutes, then take a 5-minute break. Close all notifications, put your phone face down, and commit to one task at a time. You've got this.",
-  default: "I understand. Let me help you with that. Could you give me a bit more context so I can provide the best assistance?",
-  hello: "Hello! I'm Jarvis, your personal AI assistant. I'm here to help you stay organized, get things done, and think through challenges. What can I do for you today?",
-  hi: "Hi there! Ready to help whenever you are. What's on your mind?",
-  reminder: "I've noted that down. I'll help you stay on track with your schedule.",
-  thanks: "You're welcome! Is there anything else I can help you with?",
-  thank: "Happy to help! Let me know if you need anything else.",
-};
-
-function generateResponse(userMessage: string): string {
-  const lower = userMessage.toLowerCase();
-  for (const [key, response] of Object.entries(JARVIS_RESPONSES)) {
-    if (lower.includes(key)) return response;
-  }
-  const responses = [
-    `Interesting question about "${userMessage.substring(0, 30)}...". Let me think through this carefully. The key insight here is that breaking complex problems into smaller steps makes them much more manageable. What aspect would you like to explore first?`,
-    `Great question! Here's how I'd approach it:\n\n1. Start by defining the core objective clearly\n2. Identify any constraints or requirements\n3. Brainstorm multiple approaches\n4. Choose the most effective path forward\n\nWould you like me to elaborate on any of these steps?`,
-    `I've analyzed your request. The most effective approach would be to focus on the fundamentals first, then build complexity gradually. What specific outcome are you hoping to achieve?`,
-    `That's something I can definitely help with. Based on best practices, I'd recommend starting small and iterating quickly. Consistency over intensity is usually the winning formula. What's your timeline for this?`,
-  ];
-  return responses[Math.floor(Math.random() * responses.length)];
-}
 
 const STORAGE_KEYS = {
   messages: "jarvis_messages",
   reminders: "jarvis_reminders",
 };
 
+const API_BASE = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
+
+function makeId(): string {
+  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
+async function callClaudeAPI(
+  history: { role: "user" | "assistant"; content: string }[]
+): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/jarvis/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: history }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const data = (await response.json()) as { content: string };
+  return data.content;
+}
+
 export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep a ref so we can read current messages inside async callbacks
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     (async () => {
@@ -97,21 +98,31 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(STORAGE_KEYS.reminders),
         ]);
         if (storedMessages) {
-          const parsed = JSON.parse(storedMessages);
-          setMessages(parsed.map((m: Message) => ({ ...m, timestamp: new Date(m.timestamp) })));
+          const parsed = JSON.parse(storedMessages) as Message[];
+          const hydrated = parsed.map((m) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          }));
+          setMessages(hydrated);
+          messagesRef.current = hydrated;
         } else {
-          setMessages([
+          const welcome: Message[] = [
             {
               id: "welcome",
               role: "assistant",
-              content: "Hello! I'm Jarvis, your personal AI assistant. How can I help you today?",
+              content:
+                "Hello! I'm Jarvis, your personal AI assistant powered by Claude. How can I help you today?",
               timestamp: new Date(),
             },
-          ]);
+          ];
+          setMessages(welcome);
+          messagesRef.current = welcome;
         }
         if (storedReminders) {
-          const parsed = JSON.parse(storedReminders);
-          setReminders(parsed.map((r: Reminder) => ({ ...r, createdAt: new Date(r.createdAt) })));
+          const parsed = JSON.parse(storedReminders) as Reminder[];
+          setReminders(
+            parsed.map((r) => ({ ...r, createdAt: new Date(r.createdAt) }))
+          );
         }
       } catch {}
     })();
@@ -119,52 +130,79 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (messages.length === 0) return;
-    AsyncStorage.setItem(STORAGE_KEYS.messages, JSON.stringify(messages)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEYS.messages, JSON.stringify(messages)).catch(
+      () => {}
+    );
   }, [messages]);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEYS.reminders, JSON.stringify(reminders)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEYS.reminders, JSON.stringify(reminders)).catch(
+      () => {}
+    );
   }, [reminders]);
 
   const addMessage = useCallback(async (content: string) => {
     const userMsg: Message = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      id: makeId(),
       role: "user",
       content,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+
+    // Append user message and get the full updated list
+    const updatedMessages = [...messagesRef.current, userMsg];
+    setMessages(updatedMessages);
+    messagesRef.current = updatedMessages;
     setIsTyping(true);
 
-    const delay = 800 + Math.random() * 1200;
-    typingTimeout.current = setTimeout(() => {
-      const response = generateResponse(content);
+    // Build conversation history for Claude (last 20 messages)
+    const history = updatedMessages
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    try {
+      const aiContent = await callClaudeAPI(history);
       const aiMsg: Message = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        id: makeId(),
         role: "assistant",
-        content: response,
+        content: aiContent,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, aiMsg]);
+      const withAI = [...messagesRef.current, aiMsg];
+      setMessages(withAI);
+      messagesRef.current = withAI;
+    } catch {
+      const errMsg: Message = {
+        id: makeId(),
+        role: "assistant",
+        content:
+          "I'm having trouble connecting right now. Please try again in a moment.",
+        timestamp: new Date(),
+      };
+      const withErr = [...messagesRef.current, errMsg];
+      setMessages(withErr);
+      messagesRef.current = withErr;
+    } finally {
       setIsTyping(false);
-    }, delay);
+    }
   }, []);
 
   const clearMessages = useCallback(() => {
-    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    setIsTyping(false);
     const welcome: Message = {
-      id: "welcome-" + Date.now(),
+      id: "welcome-" + makeId(),
       role: "assistant",
-      content: "Conversation cleared. I'm ready to help — what's on your mind?",
+      content: "Conversation cleared. What would you like to talk about?",
       timestamp: new Date(),
     };
-    setMessages([welcome]);
-    setIsTyping(false);
+    const reset = [welcome];
+    setMessages(reset);
+    messagesRef.current = reset;
   }, []);
 
   const addReminder = useCallback((title: string, time: string) => {
     const reminder: Reminder = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      id: makeId(),
       title,
       time,
       completed: false,
